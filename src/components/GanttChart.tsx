@@ -19,6 +19,7 @@ export default function GanttChart({ ganttChart }: GanttChartProps) {
     );
   }
 
+
   const totalTime = ganttChart[ganttChart.length - 1].end;
   
   // Color palette for different processes
@@ -35,10 +36,24 @@ export default function GanttChart({ ganttChart }: GanttChartProps) {
     'from-teal-500 to-teal-600',
   ];
 
+  // Get unique processes in order of appearance
+  const uniqueProcesses = Array.from(new Set(ganttChart.map(item => item.processId)))
+    .sort((a, b) => {
+      const aNum = parseInt(a.replace('P', ''));
+      const bNum = parseInt(b.replace('P', ''));
+      return aNum - bNum;
+    });
+
   const getProcessColor = (processId: string, index: number) => {
     const processNumber = parseInt(processId.replace('P', '')) - 1;
     return colors[processNumber % colors.length];
   };
+
+  // Create a consistent color mapping for all processes
+  const processColorMap = new Map<string, string>();
+  uniqueProcesses.forEach((processId, index) => {
+    processColorMap.set(processId, colors[index % colors.length]);
+  });
 
   return (
     <div className="space-y-6">
@@ -48,20 +63,26 @@ export default function GanttChart({ ganttChart }: GanttChartProps) {
           {ganttChart.map((item, index) => {
             const widthPercentage = ((item.end - item.start) / totalTime) * 100;
             const leftPosition = (item.start / totalTime) * 100;
+            const actualWidth = Math.max(widthPercentage, 2);
 
             return (
               <div
-                key={index}
-                className={`bg-gradient-to-r ${getProcessColor(item.processId, index)} h-full flex items-center justify-center text-white text-sm font-bold whitespace-nowrap overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-r-2 border-white/30`}
+                key={`${item.processId}-${item.start}-${item.end}-block-${index}`}
+                className={`bg-gradient-to-r ${processColorMap.get(item.processId) || getProcessColor(item.processId, index)} h-full flex items-center justify-center text-white text-sm font-bold whitespace-nowrap overflow-hidden shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-105 border-r-2 border-white/30`}
                 style={{ 
-                  width: `${widthPercentage}%`, 
+                  width: `${actualWidth}%`, 
                   left: `${leftPosition}%`, 
                   position: 'absolute',
                   animationDelay: `${index * 100}ms`
                 }}
                 title={`${item.processId}: ${item.start} - ${item.end}`}
               >
-                <span className="drop-shadow-lg">{item.processId}</span>
+                <span className="drop-shadow-lg" style={{ 
+                  fontSize: actualWidth < 6 ? '10px' : actualWidth < 10 ? '12px' : '14px',
+                  display: actualWidth < 2 ? 'none' : 'block'
+                }}>
+                  {actualWidth >= 2 ? item.processId : ''}
+                </span>
               </div>
             );
           })}
@@ -74,7 +95,7 @@ export default function GanttChart({ ganttChart }: GanttChartProps) {
           </div>
           {ganttChart.map((item, index) => (
             <div
-              key={item.end}
+              key={`${item.processId}-${item.start}-${item.end}-time-${index}`}
               className="absolute text-sm font-semibold text-slate-600 bg-white px-2 py-1 rounded-lg shadow-sm transform -translate-x-1/2"
               style={{ left: `${(item.end / totalTime) * 100}%` }}
             >
@@ -93,9 +114,9 @@ export default function GanttChart({ ganttChart }: GanttChartProps) {
           Process Legend
         </h4>
         <div className="flex flex-wrap gap-3">
-          {Array.from(new Set(ganttChart.map(item => item.processId))).map((processId, index) => (
+          {uniqueProcesses.map((processId, index) => (
             <div key={processId} className="flex items-center gap-2 bg-white/80 backdrop-blur-sm px-3 py-2 rounded-lg border border-slate-200 shadow-sm">
-              <div className={`w-4 h-4 bg-gradient-to-r ${getProcessColor(processId, index)} rounded shadow-sm`}></div>
+              <div className={`w-4 h-4 bg-gradient-to-r ${processColorMap.get(processId) || getProcessColor(processId, index)} rounded shadow-sm`}></div>
               <span className="text-sm font-semibold text-slate-700">{processId}</span>
             </div>
           ))}

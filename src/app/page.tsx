@@ -7,24 +7,35 @@ import { Process, ProcessResult, ResultMetrics } from '../types';
 import { fcfs } from '../algorithms/fcfs';
 import { sjf } from '../algorithms/sjf';
 import { roundRobin } from '../algorithms/rr';
+import { mlfq } from '../algorithms/mlfq';
 
 import ProcessForm from '../components/ProcessForm';
 import ProcessList from '../components/ProcessList';
 import ResultsTable from '../components/ResultsTable';
 import GanttChart from '../components/GanttChart';
+import MLFQVisualization from '../components/MLFQVisualization';
 
 export default function HomePage() {
   const [processes, setProcesses] = useState<Process[]>([]);
   const [results, setResults] = useState<ProcessResult[] | null>(null);
   const [metrics, setMetrics] = useState<ResultMetrics | null>(null);
-  const [quantum, setQuantum] = useState<number>(2);
-  const [selectedAlgorithm, setSelectedAlgorithm] = useState<'FCFS' | 'SJF' | 'RR'>('FCFS');
+  const [quantum, setQuantum] = useState<number | ''>(2);
+  const [selectedAlgorithm, setSelectedAlgorithm] = useState<'FCFS' | 'SJF' | 'RR' | 'MLFQ'>('FCFS');
+  const [mlfqTimeQuanta, setMlfqTimeQuanta] = useState<number[]>([4, 8, 16]);
 
-  const addProcess = (arrivalTime: number, burstTime: number) => {
+  const addProcess = (arrivalTime: number, burstTime: number, priority?: number) => {
+    // Generate unique process ID based on existing processes
+    const existingIds = processes.map(p => p.id);
+    let processNumber = 1;
+    while (existingIds.includes(`P${processNumber}`)) {
+      processNumber++;
+    }
+    
     const newProcess: Process = {
-      id: `P${processes.length + 1}`,
+      id: `P${processNumber}`,
       arrivalTime,
       burstTime,
+      priority,
     };
     setProcesses([...processes, newProcess]);
   };
@@ -40,6 +51,11 @@ export default function HomePage() {
       alert("Please add at least one process to simulate");
       return;
     }
+    
+    if (selectedAlgorithm === 'RR' && (quantum === '' || quantum < 1)) {
+      alert("Please enter a valid time quantum (minimum 1)");
+      return;
+    }
 
     let simulationResult;
     switch (selectedAlgorithm) {
@@ -50,7 +66,10 @@ export default function HomePage() {
         simulationResult = sjf(processes);
         break;
       case 'RR':
-        simulationResult = roundRobin(processes, quantum);
+        simulationResult = roundRobin(processes, quantum === '' ? 1 : quantum);
+        break;
+      case 'MLFQ':
+        simulationResult = mlfq(processes, mlfqTimeQuanta);
         break;
       default:
         return;
@@ -98,11 +117,11 @@ export default function HomePage() {
                 <div className="p-2 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-lg">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                  </svg>
+                </svg>
                 </div>
                 <h2 className="text-2xl font-bold text-slate-800">Add New Process</h2>
               </div>
-              <ProcessForm onAddProcess={addProcess} />
+              <ProcessForm onAddProcess={addProcess} selectedAlgorithm={selectedAlgorithm} />
             </div>
             
             <div className="bg-white/70 backdrop-blur-sm rounded-2xl p-6 lg:p-8 shadow-xl border border-white/20 card-hover slide-in">
@@ -111,7 +130,7 @@ export default function HomePage() {
                   <div className="p-2 bg-gradient-to-r from-blue-500 to-indigo-600 rounded-lg">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
+                  </svg>
                   </div>
                   <h2 className="text-2xl font-bold text-slate-800">Process List</h2>
                 </div>
@@ -119,7 +138,7 @@ export default function HomePage() {
                   {processes.length} processes
                 </span>
               </div>
-              <ProcessList processes={processes} onDeleteProcess={deleteProcess} />
+              <ProcessList processes={processes} onDeleteProcess={deleteProcess} selectedAlgorithm={selectedAlgorithm} />
             </div>
           </div>
           
@@ -129,8 +148,8 @@ export default function HomePage() {
               <div className="flex items-center gap-3 mb-8">
                 <div className="p-2 bg-gradient-to-r from-purple-500 to-pink-600 rounded-lg">
                   <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
                 </div>
                 <h2 className="text-3xl font-bold text-slate-800">Simulation Control</h2>
               </div>
@@ -141,12 +160,13 @@ export default function HomePage() {
                   <div className="relative">
                     <select
                       value={selectedAlgorithm}
-                      onChange={(e) => setSelectedAlgorithm(e.target.value as 'FCFS' | 'SJF' | 'RR')}
+                      onChange={(e) => setSelectedAlgorithm(e.target.value as 'FCFS' | 'SJF' | 'RR' | 'MLFQ')}
                       className="w-full bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl py-4 px-6 appearance-none focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-medium shadow-lg transition-all duration-200 hover:shadow-xl"
                     >
                       <option value="FCFS">First-Come, First-Served (FCFS)</option>
                       <option value="SJF">Shortest Job First (SJF)</option>
                       <option value="RR">Round Robin (RR)</option>
+                      <option value="MLFQ">Multi-Level Feedback Queue (MLFQ)</option>
                     </select>
                     <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-slate-500">
                       <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -162,10 +182,32 @@ export default function HomePage() {
                     <input
                       type="number"
                       value={quantum}
-                      onChange={(e) => setQuantum(Math.max(1, Number(e.target.value)))}
-                      className="w-full bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl py-4 px-6 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-medium shadow-lg transition-all duration-200 hover:shadow-xl"
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        setQuantum(value === '' ? '' : Number(value));
+                      }}
+                      className="w-full bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl py-4 px-6 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-medium shadow-lg transition-all duration-200 hover:shadow-xl [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                       min="1"
                     />
+                  </div>
+                )}
+
+                {selectedAlgorithm === 'MLFQ' && (
+                  <div className="space-y-3">
+                    <label className="block text-sm font-semibold text-slate-700 mb-3">Time Quanta (comma-separated)</label>
+                    <input
+                      type="text"
+                      value={mlfqTimeQuanta.join(', ')}
+                      onChange={(e) => {
+                        const values = e.target.value.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v) && v > 0);
+                        if (values.length > 0) {
+                          setMlfqTimeQuanta(values);
+                        }
+                      }}
+                      className="w-full bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl py-4 px-6 focus:ring-4 focus:ring-blue-500/20 focus:border-blue-500 text-slate-800 font-medium shadow-lg transition-all duration-200 hover:shadow-xl"
+                      placeholder="4, 8, 16"
+                    />
+                    <p className="text-xs text-slate-600">Enter time quanta for each priority level (highest to lowest)</p>
                   </div>
                 )}
               </div>
@@ -173,7 +215,7 @@ export default function HomePage() {
               <div className="flex flex-col sm:flex-row gap-4 lg:gap-6">
                 <button 
                   onClick={handleStartSimulation} 
-                  disabled={processes.length === 0}
+                  disabled={processes.length === 0 || (selectedAlgorithm === 'RR' && (quantum === '' || quantum < 1))}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -199,31 +241,46 @@ export default function HomePage() {
                 <div className="flex items-center gap-3 mb-8">
                   <div className="p-2 bg-gradient-to-r from-green-500 to-emerald-600 rounded-lg">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
-                    </svg>
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                  </svg>
                   </div>
                   <h2 className="text-3xl font-bold text-slate-800">Simulation Results</h2>
                 </div>
                 
-                <div className="mb-10">
-                  <h3 className="text-xl font-bold mb-6 text-slate-700 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
-                    Gantt Chart
-                  </h3>
-                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-slate-200 shadow-lg">
-                    <GanttChart ganttChart={metrics.ganttChart} />
-                  </div>
-                </div>
+                {selectedAlgorithm !== 'MLFQ' && (
+                  <>
+                    <div className="mb-10">
+                      <h3 className="text-xl font-bold mb-6 text-slate-700 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-gradient-to-r from-blue-500 to-purple-600 rounded-full"></div>
+                        Gantt Chart
+                      </h3>
+                      <div className="bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-slate-200 shadow-lg">
+                        <GanttChart ganttChart={metrics.ganttChart} />
+                      </div>
+                    </div>
+
+                    <div className="mb-10">
+                      <h3 className="text-xl font-bold mb-6 text-slate-700 flex items-center gap-2">
+                        <div className="w-2 h-2 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full"></div>
+                        Process Details
+                      </h3>
+                      <div className="bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-slate-200 shadow-lg">
+                        <ResultsTable results={results} />
+                      </div>
+                    </div>
+                  </>
+                )}
                 
-                <div className="mb-10">
-                  <h3 className="text-xl font-bold mb-6 text-slate-700 flex items-center gap-2">
-                    <div className="w-2 h-2 bg-gradient-to-r from-emerald-500 to-teal-600 rounded-full"></div>
-                    Process Details
-                  </h3>
-                  <div className="bg-white/80 backdrop-blur-sm p-6 rounded-xl border border-slate-200 shadow-lg">
-                    <ResultsTable results={results} />
+                {selectedAlgorithm === 'MLFQ' && (
+                  <div className="mb-10">
+                    <MLFQVisualization 
+                      ganttChart={metrics.ganttChart}
+                      results={results}
+                      timeQuanta={mlfqTimeQuanta}
+                      metrics={metrics}
+                    />
                   </div>
-                </div>
+                )}
                 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 lg:gap-8">
                   <div className="bg-gradient-to-br from-blue-50 to-indigo-100 p-8 rounded-2xl border border-blue-200 shadow-lg hover:shadow-xl transition-all duration-300">

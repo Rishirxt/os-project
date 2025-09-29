@@ -2,6 +2,7 @@ export type Process = {
   id: string;
   arrivalTime: number;
   burstTime: number;
+  priority?: number; // Optional priority for MLFQ
 };
 
 export type ProcessResult = {
@@ -14,7 +15,7 @@ export type ProcessResult = {
   startTime: number;
 };
 
-export type SchedulingAlgorithm = 'FCFS' | 'SJF' | 'RR';
+export type SchedulingAlgorithm = 'FCFS' | 'SJF' | 'RR' | 'MLFQ';
 
 export type ResultMetrics = {
   averageWaitingTime: number;
