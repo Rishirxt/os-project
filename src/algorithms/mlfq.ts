@@ -10,45 +10,59 @@ export const mlfq = (
 ): { results: ProcessResult[]; metrics: ResultMetrics } => {
   const queues: Queue[] = quantums.map(q => ({ quantum: q }));
 
-  const remainingProcesses = [...processes].sort((a, b) => a.arrivalTime - b.arrivalTime);
-
   const results: ProcessResult[] = [];
   const ganttChart: { processId: string; start: number; end: number }[] = [];
 
+  // Initialize process tracking
   const remainingBurstTime = new Map(processes.map(p => [p.id, p.burstTime]));
   const timeInCurrentQueue = new Map(processes.map(p => [p.id, 0]));
+  const processArrivalTimes = new Map(processes.map(p => [p.id, p.arrivalTime]));
 
   let currentTime = 0;
-
-  const arrivalMap = new Map<number, Process[]>();
-  for (const p of processes) {
-    if (!arrivalMap.has(p.arrivalTime)) arrivalMap.set(p.arrivalTime, []);
-    arrivalMap.get(p.arrivalTime)!.push(p);
-  }
-
   const readyQueues: Process[][] = queues.map(() => []);
 
-  while (
-    remainingProcesses.length > 0 ||
-    readyQueues.some(q => q.length > 0)
-  ) {
-    // Add arrived processes to their assigned priority queue
-    if (arrivalMap.has(currentTime)) {
-      arrivalMap.get(currentTime)!.forEach(p => {
-        const priority = Math.min(p.priority ?? 0, queues.length - 1);
-        readyQueues[priority].push(p);
-        timeInCurrentQueue.set(p.id, 0);
-      });
-      arrivalMap.delete(currentTime);
+  // Sort processes by arrival time for proper scheduling
+  const sortedProcesses = [...processes].sort((a, b) => a.arrivalTime - b.arrivalTime);
+
+  while (true) {
+    // Add processes that have arrived to their appropriate queues
+    for (const process of sortedProcesses) {
+      if (processArrivalTimes.get(process.id)! <= currentTime && 
+          remainingBurstTime.get(process.id)! > 0) {
+        // Check if process is already in a ready queue
+        const alreadyInQueue = readyQueues.some(queue => 
+          queue.some(p => p.id === process.id)
+        );
+        
+        if (!alreadyInQueue) {
+          const priority = Math.min(process.priority ?? 0, queues.length - 1);
+          readyQueues[priority].push(process);
+          timeInCurrentQueue.set(process.id, 0);
+        }
+      }
     }
 
-    let currentQueueIndex = readyQueues.findIndex(q => q.length > 0);
+    // Find the highest priority non-empty queue
+    let currentQueueIndex = -1;
+    for (let i = 0; i < readyQueues.length; i++) {
+      if (readyQueues[i].length > 0) {
+        currentQueueIndex = i;
+        break;
+      }
+    }
+
+    // If no processes are ready, advance time to next arrival
     if (currentQueueIndex === -1) {
-      if (remainingProcesses.length > 0) {
-        currentTime = remainingProcesses[0].arrivalTime;
+      const nextArrival = sortedProcesses.find(p => 
+        processArrivalTimes.get(p.id)! > currentTime && 
+        remainingBurstTime.get(p.id)! > 0
+      );
+      
+      if (nextArrival) {
+        currentTime = processArrivalTimes.get(nextArrival.id)!;
         continue;
       } else {
-        break;
+        break; // No more processes to schedule
       }
     }
 
@@ -58,6 +72,8 @@ export const mlfq = (
     const quantum = queues[currentQueueIndex].quantum;
     const burstLeft = remainingBurstTime.get(process.id)!;
     const timeInQueue = timeInCurrentQueue.get(process.id)!;
+    
+    // Calculate execution time
     let execTime = Math.min(burstLeft, quantum - timeInQueue);
     
     // Ensure we always execute at least 1 time unit if there's remaining burst time
@@ -70,10 +86,12 @@ export const mlfq = (
 
     ganttChart.push({ processId: process.id, start: startTime, end: endTime });
 
+    // Update remaining burst time and time in current queue
     remainingBurstTime.set(process.id, burstLeft - execTime);
     timeInCurrentQueue.set(process.id, timeInQueue + execTime);
     currentTime = endTime;
 
+    // Check if process is completed
     if (remainingBurstTime.get(process.id)! === 0) {
       const completionTime = currentTime;
       const turnaroundTime = completionTime - process.arrivalTime;
@@ -86,18 +104,19 @@ export const mlfq = (
         turnaroundTime,
         waitingTime,
       });
-
-      const idx = remainingProcesses.findIndex(p => p.id === process.id);
-      if (idx !== -1) remainingProcesses.splice(idx, 1);
     } else {
-      // Check if process used up its time quantum
-      if (timeInCurrentQueue.get(process.id)! >= quantum) {
-        // Move to next lower priority queue
+      // Process not completed, decide where to put it next
+      const totalTimeInQueue = timeInCurrentQueue.get(process.id)!;
+      
+      if (totalTimeInQueue >= quantum) {
+        // Process used up its time quantum, move to lower priority queue
         timeInCurrentQueue.set(process.id, 0);
+        
         if (currentQueueIndex < readyQueues.length - 1) {
+          // Move to next lower priority queue
           readyQueues[currentQueueIndex + 1].push(process);
         } else {
-          // Already in lowest priority queue, put back at the end
+          // Already in lowest priority queue, put back at the end of same queue
           readyQueues[currentQueueIndex].push(process);
         }
       } else {

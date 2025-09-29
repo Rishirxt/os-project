@@ -21,7 +21,8 @@ export default function HomePage() {
   const [metrics, setMetrics] = useState<ResultMetrics | null>(null);
   const [quantum, setQuantum] = useState<number | ''>(2);
   const [selectedAlgorithm, setSelectedAlgorithm] = useState<'FCFS' | 'SJF' | 'RR' | 'MLFQ'>('FCFS');
-  const [mlfqTimeQuanta, setMlfqTimeQuanta] = useState<number[]>([4, 8, 16]);
+  const [mlfqTimeQuanta, setMlfqTimeQuanta] = useState<number[] | ''>([4, 8, 16]);
+  const [mlfqTimeQuantaInput, setMlfqTimeQuantaInput] = useState<string>('4, 8, 16');
 
   const addProcess = (arrivalTime: number, burstTime: number, priority?: number) => {
     // Generate unique process ID based on existing processes
@@ -56,6 +57,11 @@ export default function HomePage() {
       alert("Please enter a valid time quantum (minimum 1)");
       return;
     }
+    
+    if (selectedAlgorithm === 'MLFQ' && (mlfqTimeQuanta === '' || (Array.isArray(mlfqTimeQuanta) && mlfqTimeQuanta.length === 0))) {
+      alert("Please enter valid time quanta (comma-separated values, minimum 1)");
+      return;
+    }
 
     let simulationResult;
     switch (selectedAlgorithm) {
@@ -69,7 +75,7 @@ export default function HomePage() {
         simulationResult = roundRobin(processes, quantum === '' ? 1 : quantum);
         break;
       case 'MLFQ':
-        simulationResult = mlfq(processes, mlfqTimeQuanta);
+        simulationResult = mlfq(processes, mlfqTimeQuanta === '' ? [4, 8, 16] : mlfqTimeQuanta);
         break;
       default:
         return;
@@ -197,9 +203,17 @@ export default function HomePage() {
                     <label className="block text-sm font-semibold text-slate-700 mb-3">Time Quanta (comma-separated)</label>
                     <input
                       type="text"
-                      value={mlfqTimeQuanta.join(', ')}
+                      value={mlfqTimeQuantaInput}
                       onChange={(e) => {
-                        const values = e.target.value.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v) && v > 0);
+                        const inputValue = e.target.value;
+                        setMlfqTimeQuantaInput(inputValue);
+                        
+                        if (inputValue.trim() === '') {
+                          setMlfqTimeQuanta('');
+                          return;
+                        }
+                        
+                        const values = inputValue.split(',').map(v => parseInt(v.trim())).filter(v => !isNaN(v) && v > 0);
                         if (values.length > 0) {
                           setMlfqTimeQuanta(values);
                         }
@@ -215,7 +229,7 @@ export default function HomePage() {
               <div className="flex flex-col sm:flex-row gap-4 lg:gap-6">
                 <button 
                   onClick={handleStartSimulation} 
-                  disabled={processes.length === 0 || (selectedAlgorithm === 'RR' && (quantum === '' || quantum < 1))}
+                  disabled={processes.length === 0 || (selectedAlgorithm === 'RR' && (quantum === '' || quantum < 1)) || (selectedAlgorithm === 'MLFQ' && (mlfqTimeQuanta === '' || (Array.isArray(mlfqTimeQuanta) && mlfqTimeQuanta.length === 0)))}
                   className="flex-1 bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 disabled:from-gray-400 disabled:to-gray-500 disabled:cursor-not-allowed text-white font-bold py-4 px-8 rounded-xl transition-all duration-300 flex items-center justify-center gap-3 shadow-lg hover:shadow-xl transform hover:-translate-y-1"
                 >
                   <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -276,7 +290,7 @@ export default function HomePage() {
                     <MLFQVisualization 
                       ganttChart={metrics.ganttChart}
                       results={results}
-                      timeQuanta={mlfqTimeQuanta}
+                      timeQuanta={mlfqTimeQuanta === '' ? [4, 8, 16] : mlfqTimeQuanta}
                       metrics={metrics}
                     />
                   </div>

@@ -11,6 +11,7 @@ export default function ProcessForm({ onAddProcess, selectedAlgorithm }: Process
   const [burstTime, setBurstTime] = useState<number | ''>(0);
   const [priority, setPriority] = useState<number | ''>(0);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showBurstTimeError, setShowBurstTimeError] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -18,7 +19,13 @@ export default function ProcessForm({ onAddProcess, selectedAlgorithm }: Process
     const burst = burstTime === '' ? 0 : burstTime;
     const processPriority = priority === '' ? 0 : priority;
     
-    if (burst < 1) return;
+    // Clear previous errors
+    setShowBurstTimeError(false);
+    
+    if (burst < 1) {
+      setShowBurstTimeError(true);
+      return;
+    }
     
     setIsSubmitting(true);
     
@@ -76,6 +83,10 @@ export default function ProcessForm({ onAddProcess, selectedAlgorithm }: Process
             onChange={(e) => {
               const value = e.target.value;
               setBurstTime(value === '' ? '' : Number(value));
+              // Clear error when user starts typing
+              if (showBurstTimeError) {
+                setShowBurstTimeError(false);
+              }
             }}
             className="w-full bg-white/80 backdrop-blur-sm border-2 border-slate-200 rounded-xl py-4 px-6 text-slate-800 font-medium shadow-lg transition-all duration-200 hover:shadow-xl focus:ring-4 focus:ring-emerald-500/20 focus:border-emerald-500 [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
             min="1"
@@ -86,7 +97,7 @@ export default function ProcessForm({ onAddProcess, selectedAlgorithm }: Process
             <span className="text-slate-400 text-sm font-medium">units</span>
           </div>
         </div>
-        {burstTime !== '' && burstTime < 1 && (
+        {showBurstTimeError && (
           <p className="text-red-500 text-xs font-medium flex items-center gap-1">
             <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
